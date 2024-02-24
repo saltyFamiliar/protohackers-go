@@ -1,6 +1,6 @@
 package main
 
-import "progohackers/internal/smoketest"
+import "protohackers-go/internal/smoketest"
 
 func main() {
 	go smoketest.TcpEcho()

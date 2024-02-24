@@ -1,57 +1,65 @@
 package main
 
 import (
+	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
-	. "progohackers/internal/means2anend"
-	. "progohackers/internal/utils"
+	. "protohackers-go/internal/means2anend"
+	. "protohackers-go/internal/utils"
+	"time"
 )
 
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-	msgs := make(PriceHistory, 0)
-
-	for i := 0; i < 10; i++ {
-		var msg RequestPacket
-
-		_, err := conn.Read(msg[:])
+func readRequest(conn net.Conn) (msg RequestPacket, err error) {
+	for totalBytes, newBytes := 0, 0; totalBytes < 9; totalBytes += newBytes {
+		newBytes, err = conn.Read(msg[totalBytes:])
 		if err != nil {
-			return
+			return msg, fmt.Errorf("error reading bytes: %v", err)
+		}
+	}
+
+	return msg, nil
+}
+
+func handleConnection(conn net.Conn) (err error) {
+	defer conn.Close()
+
+	msgs := make(PriceHistory, 0)
+	for {
+		if err := conn.SetReadDeadline(time.Now().Add(time.Second * 15)); err != nil {
+			return fmt.Errorf("unable to set deadline")
+		}
+
+		var msg RequestPacket
+		if msg, err = readRequest(conn); err != nil {
+			return err
 		}
 
 		switch requestType := msg.RequestType(); requestType {
 		case Insert:
-			msgs = append(msgs, msg)
-			timeStamp := msg.TimeStamp()
-			price := msg.Price()
-			log.Printf("Received insertion byte: %x - %c %d %d\n",
-				msg,
-				requestType,
-				timeStamp,
-				price,
-			)
-			msgs = InsertRequestPacket(msgs, msg)
+			log.Printf("Received insertion packet: %v", msg)
+			if msgs, err = InsertRequestPacket(msgs, msg); err != nil {
+				return fmt.Errorf("duplicate timestamp")
+			}
+
 		case Query:
 			if len(msgs) == 0 {
 				log.Println("Received query request but no packets to query")
 				continue
 			}
+			log.Printf("Received query packet: %v", msg)
 
-			startTimeRange := msg.StartTime()
-			endTimeRange := msg.EndTime()
-			log.Printf("Received insertion byte: %x - %c %d %d\n",
-				msg,
-				requestType,
-				startTimeRange,
-				endTimeRange,
-			)
+			response := msgs.InRange(msg.StartTime(), msg.EndTime())
+			var respBuf [4]byte
+			binary.BigEndian.PutUint32(respBuf[:], uint32(response.MeanPrice()))
+			if sent, err := conn.Write(respBuf[:]); err != nil || sent != 4 {
+				return fmt.Errorf("error sending response")
+			}
+
 		default:
-			log.Println("Invalid first byte")
-
+			return fmt.Errorf("invalid first byte: %v", msg)
 		}
 	}
-	println(msgs)
-	conn.Close()
 }
 
 func main() {

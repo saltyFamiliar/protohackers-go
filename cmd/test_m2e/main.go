@@ -4,32 +4,36 @@ import (
 	"log"
 	"math/rand"
 	"net"
-	. "progohackers/internal/means2anend"
+	. "protohackers-go/internal/means2anend"
 	"time"
 )
 
 func sendInsertionPacket(conn net.Conn) error {
-	msg := NewInsertionPacket()
+	msg := NewInsertionPacket(int32(rand.Int63())%1000, int32(rand.Int63())%1000)
 
-	msg.SetTimeStamp(int32(rand.Int63()))
-	msg.SetPrice(int32(rand.Int63()))
+	err := msg.SendOverConnection(conn)
+	if err == nil {
+		log.Printf("Sent: %x - %c %d %d\n", msg, msg[0],
+			msg.TimeStamp(), msg.Price())
+	} else {
+		log.Printf("Failed to send insertion packet")
+	}
 
-	msg.SendOverConnection(conn)
-
-	log.Printf("Sent: %x - %c %d %d\n", msg, msg[0], msg.TimeStamp(), msg.Price())
-
-	return nil
+	return err
 }
 
-func sendQueryPacket(conn net.Conn) {
-	msg := NewInsertionPacket()
+func sendQueryPacket(conn net.Conn) error {
+	msg := NewQueryPacket(int32(rand.Int63())%1000, int32(rand.Int63())%1000)
 
-	msg.SetStartTime(int32(rand.Int63()))
-	msg.SetEndTime(int32(rand.Int63()))
+	err := msg.SendOverConnection(conn)
+	if err == nil {
+		log.Printf("Sent: %x - %c %d %d\n", msg, msg[0],
+			msg.StartTime(), msg.EndTime())
+	} else {
+		log.Printf("Failed to send query packet")
+	}
 
-	msg.SendOverConnection(conn)
-
-	log.Printf("Sent: %x - %c %d %d\n", msg, msg[0], msg.StartTime(), msg.EndTime())
+	return err
 }
 
 func main() {
@@ -45,6 +49,15 @@ func main() {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	for i := 0; i < 10; i++ {
+		err := sendQueryPacket(conn)
+		if err != nil {
+			break
+		}
+
+		time.Sleep(500 * time.Millisecond)
 	}
 }

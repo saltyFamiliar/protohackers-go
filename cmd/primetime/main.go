@@ -1,6 +1,6 @@
 package main
 
-import "progohackers/internal/primetime"
+import "protohackers-go/internal/primetime"
 
 func main() {
 	primetime.TcpPrimeTest()
